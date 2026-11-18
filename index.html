@@ -5,7 +5,7 @@
 .fallback-cap{width:86px;height:60px;margin:22px auto 0;border-radius:7px;background:#a55d6a;border-bottom:5px solid #b8884b}
 .fallback-bottle{width:168px;height:202px;margin:auto;border-radius:34px 34px 24px 24px;background:linear-gradient(#fff0f0,#bc496b 89%,#eec9c5);box-shadow:inset 5px 0 9px #ffffff72,inset -4px 0 9px #61344342}
 .fallback-bottle img{width:100%;height:100%;display:block}
-.perfumes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:19px 0 24px}.perfume{padding:8px 5px;min-height:44px;font-size:13px}.perfume[aria-pressed=true]{border-color:#785652;background:#efe3dd}@media(max-width:480px){.perfumes{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>
+.perfumes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:19px 0 24px}.perfume{padding:8px 5px;min-height:44px;font-size:13px}.perfume[aria-pressed=true]{border-color:#785652;background:#efe3dd}@media(max-width:480px){.perfumes{grid-template-columns:repeat(2,minmax(0,1fr))}}.finish-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.black-cap{white-space:nowrap;min-height:44px;font-size:12px}.black-cap[aria-pressed=true]{background:#211d20;color:#fff;border-color:#211d20}@media(max-width:740px){.variants{grid-template-columns:1fr}}</style>
 <main><header><span class="brand">PANCHMORRA</span><span class="sub">Bottle studio</span></header><nav class="perfumes" aria-label="Perfumes"><button class="perfume" data-perfume="0" aria-pressed="true">Fiora</button><button class="perfume" data-perfume="1" aria-pressed="false">Xceed</button><button class="perfume" data-perfume="2" aria-pressed="false">Most Wanted.</button><button class="perfume" data-perfume="3" aria-pressed="false">Black Velvet.</button></nav><div class="layout"><section><h1 id="perfume-name">Fiora</h1><p>Choose a glass finish.</p><div class="variants" aria-label="Bottle finish">
 <button class="variant" data-variant="0" aria-pressed="false"><span class="swatch" style="background:#e6a285"></span><strong>Peach Veil</strong></button>
 <button class="variant" data-variant="1" aria-pressed="true"><span class="swatch" style="background:#d68e99"></span><strong>Rose Silk</strong></button>
@@ -202,7 +202,8 @@ function init(){
  });
  gl.enable(gl.DEPTH_TEST);
  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
- let product=0,selected=1,yaw=-.14,pitch=.07,zoom=1;
+ const blackCap=[.025,.022,.027];
+ let product=0,selected=1,useBlackCap=false,yaw=-.14,pitch=.07,zoom=1;
  const printTextures=[...frontArt,rearPrint,sampleRear].map(source=>{
  const printTexture=gl.createTexture();
  gl.bindTexture(gl.TEXTURE_2D,printTexture);
@@ -233,7 +234,7 @@ function init(){
    gl.uniform2f(uniforms.resolution,canvas.width,canvas.height);
    gl.uniform3f(uniforms.view,yaw,pitch,fit*zoom);
    const finish=products[product].finishes[selected];
-   gl.uniform3fv(uniforms.lightTint,finish.cap);
+   gl.uniform3fv(uniforms.lightTint,useBlackCap?blackCap:finish.cap);
    gl.uniform3fv(uniforms.glassShoulder,finish.shoulder);
    gl.uniform3fv(uniforms.glassBase,finish.glassBase);
    for(const {start,count,mode} of meshes.slice(3)){
@@ -279,25 +280,19 @@ function init(){
  const variantList=document.querySelector('.variants');
  function refreshFinish(){
    variantList.querySelectorAll('[data-variant]').forEach(button=>{
-     button.setAttribute('aria-pressed',String(Number(button.dataset.variant)===selected));
+     button.setAttribute('aria-pressed',String(Number(button.dataset.variant)===selected && button.hasAttribute('data-black-cap')===useBlackCap));
    });
-   document.querySelector('#finish').textContent=products[product].finishes[selected].note;
+   document.querySelector('#finish').textContent=products[product].finishes[selected].note+(useBlackCap?' With a jet black cap.':'');
    draw();
  }
  variantList.addEventListener('click',event=>{
    const button=event.target.closest('[data-variant]');
    if(!button)return;
    selected=Number(button.dataset.variant);
+   useBlackCap=button.hasAttribute('data-black-cap');
    refreshFinish();
  });
- const perfumeButtons=[...document.querySelectorAll('[data-perfume]')];
- perfumeButtons.forEach(button=>button.addEventListener('click',()=>{
-   product=Number(button.dataset.perfume);
-   const perfume=products[product];
-   selected=perfume.initial;
-   perfumeButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
-   document.querySelector('#perfume-name').textContent=perfume.name;
-   canvas.setAttribute('aria-label',perfume.name+' 3D bottle model');
+ function renderFinishes(perfume){
    variantList.replaceChildren(...perfume.finishes.map((finish,i)=>{
      const option=document.createElement('button');
      option.className='variant';
@@ -308,8 +303,30 @@ function init(){
      const name=document.createElement('strong');
      name.textContent=finish.name;
      option.append(swatch,name);
-     return option;
+     const black=document.createElement('button');
+     black.className='black-cap';
+     black.dataset.variant=i;
+     black.dataset.blackCap='';
+     black.setAttribute('aria-label',finish.name+' with Black Cap');
+     black.textContent='Black Cap';
+     const row=document.createElement('div');
+     row.className='finish-row';
+     row.append(option,black);
+     return row;
    }));
+ }
+ renderFinishes(products[product]);
+ refreshFinish();
+ const perfumeButtons=[...document.querySelectorAll('[data-perfume]')];
+ perfumeButtons.forEach(button=>button.addEventListener('click',()=>{
+   product=Number(button.dataset.perfume);
+   const perfume=products[product];
+   selected=perfume.initial;
+   useBlackCap=false;
+   perfumeButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+   document.querySelector('#perfume-name').textContent=perfume.name;
+   canvas.setAttribute('aria-label',perfume.name+' 3D bottle model');
+   renderFinishes(perfume);
    yaw=-.14;pitch=.07;zoom=1;
    refreshFinish();
  }));
